@@ -1,0 +1,102 @@
+class AssemblyLine:
+    def __init__(self, label=None, instruction=None, operands=None, comment=None, lc=0):
+        self.label = label
+        self.instruction = instruction
+        self.operands = operands or []
+        self.comment = comment
+        self.lc = lc
+
+    def __str__(self):
+        return f"LC: {self.lc}, Label: {self.label}, Instruction: {self.instruction}, Operands: {self.operands}"
+
+
+class OpcodeInfo:
+    def __init__(self, opcode, size, type_):
+        self.opcode = opcode
+        self.size = size
+        self.type_ = type_
+
+
+def create_machine_opcode_table():
+    return {
+        "MOVER": OpcodeInfo("20", 2, "IS"),
+        "ADD": OpcodeInfo("21", 2, "IS"),
+        "CMP": OpcodeInfo("22", 2, "IS"),
+        "BNE": OpcodeInfo("23", 2, "IS"),
+        "START": OpcodeInfo("24", 0, "AD"),
+        "END": OpcodeInfo("25", 0, "AD"),
+        "A": OpcodeInfo("1", 0, "R"),
+        "B": OpcodeInfo("2", 0, "R"),
+        "C": OpcodeInfo("3", 0, "R"),
+        "D": OpcodeInfo("4", 0, "R"),
+        "JUMP": OpcodeInfo("26", 3, "IS"),
+        "DC": OpcodeInfo("27", 0, "DS"),
+    }
+
+
+def parse_assembly_code(code, mot):
+    lines = []
+    lc = 0  # Initialize Location Counter
+    for line in code.splitlines():
+        if not line.strip() or line.startswith(";"):
+            continue
+
+        parts = line.split()
+        label = parts[0][:-1] if parts[0].endswith(":") else None
+        instruction = parts[1] if label else parts[0]
+        operands = [p for p in parts[2 if label else 1:] if not p.startswith(";")]
+        comment = line.split(";", 1)[1] if ";" in line else None
+
+        if lc == 0 and instruction.upper() == "START" and operands:
+            try:
+                lc = int(operands.pop(0))
+            except (ValueError, IndexError):
+                lc = 0  # Default to 0 if invalid or no starting location provided
+
+
+        lines.append(AssemblyLine(label, instruction, operands, comment, lc))
+        lc += mot.get(instruction, OpcodeInfo(None, 1, None)).size
+
+    return lines
+
+
+def create_symbol_table(lines):
+    return {line.label: line.lc for line in lines if line.label}
+
+
+def generate_intermediate_code(line, opcode_info):
+    if not opcode_info:
+        return "Unknown"
+    ic = f"({opcode_info.type_},{opcode_info.opcode})"
+    for operand in line.operands:
+        ic += f" (C,{operand})" if operand.isdigit() else f" (ST,{operand})"
+    return ic
+
+
+def main():
+    mot = create_machine_opcode_table()
+
+    # Read assembly code
+    with open("C:\\SEM 5\\LabESEPractice\\assembly_code.txt", "r") as file:
+        code = file.read()
+
+    lines = parse_assembly_code(code, mot)
+    symbol_table = create_symbol_table(lines)
+
+    print("Intermediate Code:")
+    for line in lines:
+        opcode_info = mot.get(line.instruction)
+        print(f"LC: {line.lc} {generate_intermediate_code(line, opcode_info) if opcode_info else 'Unknown'}")
+
+    print("\nDeclarative Statements:")
+    for line in lines:
+        if mot.get(line.instruction, OpcodeInfo(None, None, None)).type_ == "DS":
+            print(f"LC: {line.lc} Instruction: {line.instruction} Operand1: {line.operands[0]}")
+
+    print("\nSymbol Table:")
+    for label, lc in symbol_table.items():
+        print(f"Label: {label}, LC: {lc}")
+
+
+if __name__ == "__main__":
+    main()
